@@ -2,7 +2,7 @@ var map = L.map('map', {
             center: [40.7263, -73.98600],
             zoom: 15,
             minZoom: 14, // Minimum zoom level
-            maxZoom: 18, // Maximum zoom level
+            maxZoom: 20, // Maximum zoom level
             maxBounds: [
                 [40.6958, -74.0563], // Southwest coordinates
                 [40.7531, -73.9268]  // Northeast coordinates
@@ -15,7 +15,7 @@ var map = L.map('map', {
             maxZoom: 20
         }).addTo(map);
 
-        // Add your GeoJSON data here
+        
         var sidewalks = {
             "type": "FeatureCollection",
             "features": [
@@ -777,3 +777,68 @@ var map = L.map('map', {
             var selectedWidth = parseInt(this.value);
             updateSidewalks(selectedWidth);
         });
+
+
+// // get polygon centroid
+// function getCentroid(coords) {
+//   let x = 0, y = 0;
+//   coords.forEach(coord => {
+//     x += coord[0];
+//     y += coord[1];
+//   });
+//   return [x / coords.length, y / coords.length];
+// }
+
+// fetch and display sidewalks
+async function loadEastVillageSidewalks() {
+  try {
+    console.log('Fetching sidewalks...');
+    // query using bounding box
+    const url = 'https://data.cityofnewyork.us/resource/52n9-sdep.json?' + 
+      '$where=intersects(the_geom, "POLYGON((' +
+      '-73.9927 40.7242, ' +
+      '-73.9787 40.7202, ' +
+      '-73.9756 40.7285, ' +
+      '-73.9875 40.7325, ' +
+      '-73.9927 40.7242' +
+      '))")&$limit=5000';
+    
+    // filter using bounding box at API level
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    console.log(`Fetched ${data.length} total east village sidewalks`);
+    console.log('A polygon:', data[66]);
+    
+data.forEach((sidewalk, index) => {
+      if (!sidewalk.the_geom?.coordinates?.[0]?.[0]) return;
+      
+      const coords = sidewalk.the_geom.coordinates[0];
+      if (!Array.isArray(coords) || coords.length === 0) return;
+      
+      // Convert to Leaflet format [lat, lng]
+      const leafletCoords = coords.map(coords => {
+        if (!Array.isArray(coords) || coords.length < 2) return null;
+        return coords.map(coord => [coord[1], coord[0]])
+      }).filter(coords => coords !== null);
+      
+      if (leafletCoords.length === 0) return;
+      
+      // Add to map
+      L.polygon(leafletCoords, {
+        color: 'blue',
+        weight: 2,
+        fillColor: 'blue',
+        fillOpacity: 0.3
+      }).addTo(map);
+    });
+    
+    console.log(`Added ${data.length} sidewalks to map`);
+    
+  } catch (error) {
+    console.error('Failed to load sidewalks:', error);
+  }
+}
+
+// Call the function
+loadEastVillageSidewalks();
