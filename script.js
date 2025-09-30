@@ -16,7 +16,7 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/
             maxZoom: 20
     }).addTo(map);
 
-        
+// my old geojson data      
 // var sidewalks = {
 //             "type": "FeatureCollection",
 //             "features": [
@@ -778,7 +778,7 @@ async function loadEastVillageSidewalks() {
     const data = await response.json();
     
     console.log(`Fetched ${data.length} total east village sidewalks`);
-    console.log('A polygon:', data[66]);
+    // console.log('A polygon:', data[66]);
 
     const features = [];
     
@@ -786,8 +786,8 @@ async function loadEastVillageSidewalks() {
       if (!sidewalk.the_geom?.coordinates?.[0]?.[0]) return;
       
       const coords = sidewalk.the_geom.coordinates[0];
-      const centerline = createCenterline(coords);
-      if (!centerline) return;
+      const segments = createSegmentedCenterline(coords);
+      if (!segments) return;
     
     //   if (!Array.isArray(coords) || coords.length === 0) return;
 
@@ -797,29 +797,27 @@ async function loadEastVillageSidewalks() {
     //   console.log('Sidewalk', index, 'width:', width.toFixed(2), 'ft, category:', categorizeWidth(width));
 
     // geojson push 
+        segments.forEach(segment => {
+            features.push({
+                type: "Feature",
+                properties: {
+                width: segment.width,
+                category: segment.category
+                },
+                geometry: {
+                type: "LineString",
+                coordinates: segment.line
+                }
+            });
+        });
 
-      features.push({
-        type: "Feature",
-        properties: {
-          width: centerline.width,
-          category: centerline.category
-        },
-        geometry: {
-          type: "LineString",
-          coordinates: centerline.line
-        }
-      });
-
-
-    // Convert to Leaflet format [lat, lng]
+    // Display fetched polygons
     //   const leafletCoords = coords.map(coords => {
     //     if (!Array.isArray(coords) || coords.length < 2) return null;
     //     return coords.map(coord => [coord[1], coord[0]])
     //   }).filter(coords => coords !== null);
       
     //   if (leafletCoords.length === 0) return;
-
-
       
     //   // Add to map
     //   L.polygon(leafletCoords, {
@@ -828,7 +826,6 @@ async function loadEastVillageSidewalks() {
     //     fillColor: 'blue',
     //     fillOpacity: 0.3
     //   }).addTo(map);
-   
     });
     
     const geojson = {
@@ -837,7 +834,7 @@ async function loadEastVillageSidewalks() {
     };
     
     
-    console.log(`Added ${data.length} sidewalks to map`);
+    // console.log(`Added ${data.length} sidewalks to map`);
     console.log(`Processed ${features.length} sidewalk lines`);
     console.log('GeoJSON ready:', geojson);
 
@@ -848,6 +845,7 @@ async function loadEastVillageSidewalks() {
   }
 }
 
+let geojson;
 
 // Calculate distance between two lat/lng points (in feet)
 function haversineDistance(coord1, coord2) {
@@ -866,70 +864,101 @@ function haversineDistance(coord1, coord2) {
   return R * c * 3.28084; // convert to feet
 }
 
-
-// Calculate width
-function calculateWidth(rings) {
-  const outerRing = rings[0];
-  const innerRing = rings[1];
-  
-  if (outerRing.length < 4) return 0;
-  
-  // If there's an inner ring (hole), measure distance between outer and inner
-  if (innerRing && innerRing.length >= 3) {
-    let minWidth = Infinity;
-    for (let i = 0; i < outerRing.length - 1; i++) {
-      for (let j = 0; j < innerRing.length - 1; j++) {
-        const distance = haversineDistance(outerRing[i], innerRing[j]);
-        minWidth = Math.min(minWidth, distance);
-      }
+// Find closest point on inner ring to outer point
+function getWidthAtPoint(outerPoint, innerRing) {
+    let minDist = Infinity;
+    for (let i = 0; i < innerRing.length - 1; i++) {
+        const dist = haversineDistance(outerPoint, innerRing[i]);
+        minDist = Math.min(minDist, dist);
     }
-    return minWidth === Infinity ? 0 : minWidth;
-  }
-  
-  // No inner ring - measure across outer ring
-  let minWidth = Infinity;
-  for (let i = 0; i < outerRing.length - 1; i++) {
-    for (let j = i + Math.floor(outerRing.length / 3); j < outerRing.length - 1; j++) {
-      const distance = haversineDistance(outerRing[i], outerRing[j]);
-      minWidth = Math.min(minWidth, distance);
-    }
-  }
-  return minWidth === Infinity ? 0 : minWidth;
+    return minDist;
 }
 
-// Create centerline from outer ring
-function createCenterline(rings) {
-  const outerRing = rings[0];
-  
-  if (outerRing.length < 4) return null;
-  
-  const width = calculateWidth(rings);
-  
-  if (width < 2) return null;
-  
-  // Create simplified centerline from outer ring
-  // Take every Nth point to simplify
-  const linePoints = [];
-  const lineStep = Math.max(1, Math.floor(outerRing.length / 120));
-  
-  for (let i = 0; i < outerRing.length - 1; i += lineStep) {
-    linePoints.push(outerRing[i]);
-  }
-  
-  if (linePoints.length < 2) return null;
-  
-  return {
-    line: linePoints,
-    width: Math.round(width * 10) / 10,
-    category: categorizeWidth(width)
-  };
+// Create multiple line segments with individual width measurements
+function createSegmentedCenterline(rings) {
+    const outerRing = rings[0];
+    const innerRing = rings[1];
+    
+    if (outerRing.length < 4) return [];
+    
+    // Sample points along the polygon
+    const sampledPoints = [];
+    const sampleStep = Math.max(1, Math.floor(outerRing.length / 120)); 
+    
+    for (let i = 0; i < outerRing.length - 1; i += sampleStep) {
+        const point = outerRing[i];
+        let width;
+        
+        // Measure width at this point
+        if (innerRing && innerRing.length >= 3) {
+            width = getWidthAtPoint(point, innerRing);
+        } else {
+            // Measure to opposite side of outer ring
+            const oppositeIdx = (i + Math.floor(outerRing.length / 2)) % outerRing.length;
+            width = haversineDistance(point, outerRing[oppositeIdx]) * 0.05;
+        }
+        
+        if (width >= 0.5) { // filter out very narrow widths
+            sampledPoints.push({
+                coord: point,
+                width: width,
+                category: categorizeWidth(width)
+            });
+        }
+    }
+    
+    if (sampledPoints.length < 2) return [];
+    
+    // Group consecutive points with same category into line segments
+    const segments = [];
+    let currentSegment = {
+        points: [sampledPoints[0].coord],
+        category: sampledPoints[0].category,
+        widths: [sampledPoints[0].width]
+    };
+    
+    for (let i = 1; i < sampledPoints.length; i++) {
+        if (sampledPoints[i].category === currentSegment.category) {
+            // Continue current segment
+            currentSegment.points.push(sampledPoints[i].coord);
+            currentSegment.widths.push(sampledPoints[i].width);
+        } else {
+            // Save current segment and start new one
+            if (currentSegment.points.length >= 3) {
+            const minWidth = Math.min(...currentSegment.widths);
+            segments.push({
+                line: currentSegment.points,
+                category: currentSegment.category,
+                width: minWidth,
+        });
+}
+            
+            currentSegment = {
+                points: [sampledPoints[i].coord],
+                category: sampledPoints[i].category,
+                widths: [sampledPoints[i].width]
+            };
+        }
+    }
+    
+    // Add final segment
+    if (currentSegment.points.length >= 2) {
+        const minWidth = Math.min(...currentSegment.widths);
+        segments.push({
+            line: currentSegment.points,
+            width: minWidth,
+            category: currentSegment.category
+        });
+    }
+    
+    return segments;
 }
 
 // Categorize width
 function categorizeWidth(width) {
-  if (width < 6.5) return 1;
-  if (width <= 8.5) return 2;
-  if (width <= 10) return 3;
+  if (width < 5) return 1;
+  if (width <= 16) return 2;
+  if (width <= 24) return 3;
   return 4;
 }
 
