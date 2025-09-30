@@ -1,3 +1,4 @@
+
 var map = L.map('map', {
             center: [40.7263, -73.98600],
             zoom: 15,
@@ -7,16 +8,16 @@ var map = L.map('map', {
                 [40.6958, -74.0563], // Southwest coordinates
                 [40.7531, -73.9268]  // Northeast coordinates
             ]
-        });
+});
 
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png', {
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
             subdomains: 'abcd',
             maxZoom: 20
-        }).addTo(map);
+    }).addTo(map);
 
         
-        var sidewalks = {
+var sidewalks = {
             "type": "FeatureCollection",
             "features": [
                 // 2nd Ave
@@ -747,47 +748,39 @@ var map = L.map('map', {
                     }
                 }
             ]
-        };
+    };
 
-        // Function to filter and display sidewalks based on selected width
-        function updateSidewalks(width) {
-            // Clear existing sidewalk layers
-            map.eachLayer(function (layer) {
-                if (layer.options && layer.options.className === 'sidewalk') {
-                    map.removeLayer(layer);
-                }
-            });
-
-            // Filter sidewalks based on width
-            sidewalks.features.forEach(function (feature) {
-                if (feature.properties.width >= width) {
-                    L.geoJSON(feature, {
-                        style: {color: "#8c5640", weight: 2.5},
-                        className: 'sidewalk'
-                    }).addTo(map);
-                }
-            });
+    // Function to filter and display sidewalks based on selected width
+function updateSidewalks(width) {
+    // Clear existing sidewalk layers
+    map.eachLayer(function (layer) {
+        if (layer.options && layer.options.className === 'sidewalk') {
+            map.removeLayer(layer);
         }
+    });
 
-        // Initialize with default width (3 people)
-        updateSidewalks(3);
+    // Filter sidewalks based on width
+    sidewalks.features.forEach(function (feature) {
+        if (feature.properties.width >= width) {
+            L.geoJSON(feature, {
+                style: {color: "#8c5640", weight: 2.5},
+                className: 'sidewalk'
+            }).addTo(map);
+        }
+    });
+}
 
-        // Event listener for dropdown change
-        document.getElementById('widthSelector').addEventListener('change', function () {
-            var selectedWidth = parseInt(this.value);
-            updateSidewalks(selectedWidth);
-        });
+// Initialize with default width (3 people)
+updateSidewalks(3);
+
+// Event listener for dropdown change
+document.getElementById('widthSelector').addEventListener('change', function () {
+    var selectedWidth = parseInt(this.value);
+    updateSidewalks(selectedWidth);
+});
 
 
-// // get polygon centroid
-// function getCentroid(coords) {
-//   let x = 0, y = 0;
-//   coords.forEach(coord => {
-//     x += coord[0];
-//     y += coord[1];
-//   });
-//   return [x / coords.length, y / coords.length];
-// }
+// new code to fetch sidewalks from NYC Open Data
 
 // fetch and display sidewalks
 async function loadEastVillageSidewalks() {
@@ -809,20 +802,47 @@ async function loadEastVillageSidewalks() {
     
     console.log(`Fetched ${data.length} total east village sidewalks`);
     console.log('A polygon:', data[66]);
+
+    const features = [];
     
-data.forEach((sidewalk, index) => {
+    data.forEach((sidewalk, index) => {
       if (!sidewalk.the_geom?.coordinates?.[0]?.[0]) return;
       
       const coords = sidewalk.the_geom.coordinates[0];
-      if (!Array.isArray(coords) || coords.length === 0) return;
+      const centerline = createCenterline(coords);
+      if (!centerline) return;
+    
+    //   if (!Array.isArray(coords) || coords.length === 0) return;
+
+    //   const width = calculateWidth(coords);
+    //   if (width < 1) return; // filter out very narrow sidewalks
       
-      // Convert to Leaflet format [lat, lng]
+    //   console.log('Sidewalk', index, 'width:', width.toFixed(2), 'ft, category:', categorizeWidth(width));
+
+    // geojson push 
+
+      features.push({
+        type: "Feature",
+        properties: {
+          width: centerline.width,
+          category: centerline.category
+        },
+        geometry: {
+          type: "LineString",
+          coordinates: centerline.line
+        }
+      });
+
+
+    // Convert to Leaflet format [lat, lng]
       const leafletCoords = coords.map(coords => {
         if (!Array.isArray(coords) || coords.length < 2) return null;
         return coords.map(coord => [coord[1], coord[0]])
       }).filter(coords => coords !== null);
       
       if (leafletCoords.length === 0) return;
+
+
       
       // Add to map
       L.polygon(leafletCoords, {
@@ -831,14 +851,113 @@ data.forEach((sidewalk, index) => {
         fillColor: 'blue',
         fillOpacity: 0.3
       }).addTo(map);
+   
     });
     
+    const geojson = {
+      type: "FeatureCollection",
+      features: features
+    };
+    
+    
     console.log(`Added ${data.length} sidewalks to map`);
+    console.log(`Processed ${features.length} sidewalk lines`);
+    console.log('GeoJSON ready:', geojson);
+
+    return geojson;
     
   } catch (error) {
     console.error('Failed to load sidewalks:', error);
   }
 }
 
+
+// Calculate distance between two lat/lng points (in feet)
+function haversineDistance(coord1, coord2) {
+  const [lon1, lat1] = coord1;
+  const [lon2, lat2] = coord2;
+  
+  const R = 6371000; // earth radius lmao
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c * 3.28084; // convert to feet
+}
+
+
+// Calculate width
+function calculateWidth(rings) {
+  const outerRing = rings[0];
+  const innerRing = rings[1];
+  
+  if (outerRing.length < 4) return 0;
+  
+  // If there's an inner ring (hole), measure distance between outer and inner
+  if (innerRing && innerRing.length >= 3) {
+    let minWidth = Infinity;
+    for (let i = 0; i < outerRing.length - 1; i++) {
+      for (let j = 0; j < innerRing.length - 1; j++) {
+        const distance = haversineDistance(outerRing[i], innerRing[j]);
+        minWidth = Math.min(minWidth, distance);
+      }
+    }
+    return minWidth === Infinity ? 0 : minWidth;
+  }
+  
+  // No inner ring - measure across outer ring
+  let minWidth = Infinity;
+  for (let i = 0; i < outerRing.length - 1; i++) {
+    for (let j = i + Math.floor(outerRing.length / 3); j < outerRing.length - 1; j++) {
+      const distance = haversineDistance(outerRing[i], outerRing[j]);
+      minWidth = Math.min(minWidth, distance);
+    }
+  }
+  return minWidth === Infinity ? 0 : minWidth;
+}
+
+// Create centerline from outer ring
+function createCenterline(rings) {
+  const outerRing = rings[0];
+  
+  if (outerRing.length < 4) return null;
+  
+  const width = calculateWidth(rings);
+  
+  if (width < 2) return null;
+  
+  // Create simplified centerline from outer ring
+  // Take every Nth point to simplify
+  const linePoints = [];
+  const lineStep = Math.max(1, Math.floor(outerRing.length / 4));
+  
+  for (let i = 0; i < outerRing.length - 1; i += lineStep) {
+    linePoints.push(outerRing[i]);
+  }
+  
+  if (linePoints.length < 2) return null;
+  
+  return {
+    line: linePoints,
+    width: Math.round(width * 10) / 10,
+    category: categorizeWidth(width)
+  };
+}
+
+
+
+// Categorize width
+function categorizeWidth(width) {
+  if (width < 6) return 'narrow';
+  if (width <= 9) return 'mid';
+  return 'wide';
+}
+
+
 // Call the function
 loadEastVillageSidewalks();
+
