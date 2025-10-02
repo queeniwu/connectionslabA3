@@ -761,8 +761,7 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/
 
 
 async function loadEastVillageSidewalks() {
-  try {
-    console.log('Fetching sidewalks...');
+
     // query using bounding box
     const url = 'https://data.cityofnewyork.us/resource/52n9-sdep.json?' + 
       '$where=intersects(the_geom, "POLYGON((' +
@@ -789,14 +788,7 @@ async function loadEastVillageSidewalks() {
       const segments = createSegmentedCenterline(coords);
       if (!segments) return;
     
-    //   if (!Array.isArray(coords) || coords.length === 0) return;
-
-    //   const width = calculateWidth(coords);
-    //   if (width < 1) return; // filter out very narrow sidewalks
-      
-    //   console.log('Sidewalk', index, 'width:', width.toFixed(2), 'ft, category:', categorizeWidth(width));
-
-    // geojson push 
+        // Add each segment as a separate feature
         segments.forEach(segment => {
             features.push({
                 type: "Feature",
@@ -839,10 +831,6 @@ async function loadEastVillageSidewalks() {
     console.log('GeoJSON ready:', geojson);
 
     return geojson;
-    
-  } catch (error) {
-    console.error('Failed to load sidewalks:', error);
-  }
 }
 
 let geojson;
@@ -874,7 +862,7 @@ function getWidthAtPoint(outerPoint, innerRing) {
     return minDist;
 }
 
-// Create multiple line segments with individual width measurements
+// Create multiple line segments with individual width measurements (Claude Alert)
 function createSegmentedCenterline(rings) {
     const outerRing = rings[0];
     const innerRing = rings[1];
@@ -966,7 +954,7 @@ function categorizeWidth(width) {
 // Call the function
 loadEastVillageSidewalks().then(data => {
     geojson = data;
-    updateSidewalks(3); // Initialize with narrow
+    updateSidewalks(3); // Initialize with 3 person sidewalks
 });
 
 function updateSidewalks(width) {

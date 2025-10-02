@@ -1,0 +1,76 @@
+@import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+html {
+  height: 100%;
+  width: 100%;
+}
+
+#map { 
+  height: 100vh; 
+}
+
+#controls {
+    position: absolute;
+  top: 5%;
+  left: 50%;
+  transform: translate(-50%, -10%);
+  z-index: 1000;
+  text-align: center;
+  font-family: 'VT323', VT323, monospace;
+  font-size: 22px;
+  color: #8c5640;
+    padding: 4px;
+}
+
+body {
+  margin: 0px;
+}
+
+#watermark {
+  position: absolute;
+  bottom: 5%;
+  left: 50%;
+  transform: translate(-50%, -5%);
+    z-index: 1000;
+  text-align: center;
+  font-family: 'VT323', VT323, monospace;
+  font-size: 16px;
+  color: #8c5640;
+    padding: 4px;
+}
+
+#watermark a{
+  color: #5c3b2d;
+  text-decoration: none;
+}
+
+#widthSelector {
+  font-family: 'VT323', VT323, monospace;
+  font-size: 16px;
+  color: #fff;
+  padding: 4px 24px 4px 10px; /* Adjust padding to leave space for the caret */
+  border: 1px solid #5c3b2d;
+  border-radius: 2px;
+  background-color: #8c5640;
+  -webkit-appearance: none; /* Remove default arrow in Safari */
+  -moz-appearance: none; /* Remove default arrow in Firefox */
+  appearance: none; /* Remove default arrow */
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="6" viewBox="0 0 12 6"><path fill="%23FFF" d="M6 6L0 0h12z"/></svg>'); /* Add custom caret icon */
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+/* Custom arrow icon for the select dropdown */
+#widthSelector::-ms-expand {
+  display: none; /* Remove default arrow in IE 10+ */
+}
+#widthSelector option {
+  font-family: 'VT323', monospace;
+}
+
+.vt323-regular {
+  font-family: "VT323", monospace;
+  font-weight: 400;
+  font-style: normal;
+}
+
+
